@@ -1,4 +1,4 @@
-const CACHE_NAME = "cuentaperras-v1";
+const CACHE_NAME = "cuentaperras-v2";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function(event){
@@ -17,10 +17,16 @@ self.addEventListener("activate", function(event){
   self.clients.claim();
 });
 
+// Red primero: si hay conexión, siempre trae la versión más reciente y actualiza
+// la caché. Si no hay conexión, usa la última copia guardada como respaldo.
 self.addEventListener("fetch", function(event){
   event.respondWith(
-    caches.match(event.request).then(function(cached){
-      return cached || fetch(event.request).catch(function(){ return caches.match("./index.html"); });
+    fetch(event.request).then(function(response){
+      var copy = response.clone();
+      caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, copy); });
+      return response;
+    }).catch(function(){
+      return caches.match(event.request).then(function(cached){ return cached || caches.match("./index.html"); });
     })
   );
 });
