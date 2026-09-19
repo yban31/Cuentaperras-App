@@ -293,6 +293,12 @@
       <h3><span class="icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"></circle><circle cx="18" cy="20" r="1"></circle><polyline points="3 4 5 4 7 14 18 14 20 7 6 7"></polyline></svg></span>Gastos variables por categoría, este mes</h3>
       <div id="r-cats"></div>
     </div>
+
+    <div class="row-block" id="r-fixed-block">
+      <h3><span class="icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></span>Gastos fijos, se descuentan solos cada mes</h3>
+      <div id="r-fixed"></div>
+      <div class="runway-note" id="r-fixed-empty" style="display:none;">Todavía no tienes gastos fijos configurados. Añádelos en Ajustes.</div>
+    </div>
   </section>
 
   <!-- GASTOS -->
@@ -340,6 +346,7 @@
 
     <div class="row-block">
       <h3><span class="icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"></circle><circle cx="18" cy="20" r="1"></circle><polyline points="3 4 5 4 7 14 18 14 20 7 6 7"></polyline></svg></span>Presupuesto por categoría (gastos variables)</h3>
+      <div class="runway-note">Para gastos que cambian cada vez y anotas tú (compra, gasolina, ocio...). Si algo es siempre la misma cantidad cada mes (una cuota, una suscripción), ponlo mejor como gasto fijo más abajo, para no contarlo dos veces.</div>
       <div id="a-cats"></div>
       <button class="add-cat-btn" id="a-add-cat">+ Añadir categoría</button>
     </div>
@@ -809,6 +816,24 @@
         '<div class="cat-bar"><div class="fill'+(spent>b && b>0 ? ' over':'')+'" style="width:'+pctc+'%"></div></div>';
       catsWrap.appendChild(el);
     });
+
+    var fixedWrap = document.getElementById("r-fixed");
+    var fixedEmpty = document.getElementById("r-fixed-empty");
+    fixedWrap.innerHTML = "";
+    if (state.fixedExpenses.length === 0) {
+      fixedEmpty.style.display = "block";
+    } else {
+      fixedEmpty.style.display = "none";
+      state.fixedExpenses.forEach(function(f){
+        var frow = document.createElement("div");
+        frow.className = "row";
+        frow.innerHTML =
+          '<span class="name"><span class="icon">'+iconSvg('repeat',16)+'</span>'+escapeHtml(f.name)+
+          ' <span style="color:var(--muted); font-size:12px;">· '+escapeHtml(f.method)+'</span></span>' +
+          '<span class="amount">'+eur(f.amount)+'</span>';
+        fixedWrap.appendChild(frow);
+      });
+    }
   }
 
   // ---------- Render: Gastos ----------
