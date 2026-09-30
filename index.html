@@ -284,9 +284,10 @@
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 4 17 12 9 20"></polyline></svg>
         </button>
       </div>
-      <div class="row" style="margin-top:10px;"><span class="name">Ingresos ese mes</span><span class="amount" id="r-ingresos">—</span></div>
+      <div class="row"><span class="name">Ingresos ese mes</span><span class="amount" id="r-ingresos">—</span></div>
       <div class="row"><span class="name">Gastado ese mes (incl. fijos)</span><span class="amount" id="r-spent">—</span></div>
       <div class="row"><span class="name">Presupuestado ese mes</span><span class="amount" id="r-budgeted">—</span></div>
+      <div class="runway-note" id="r-fixed-pending" style="display:none;"></div>
     </div>
 
     <div class="row-block" id="r-cats-block">
@@ -353,7 +354,7 @@
 
     <div class="row-block">
       <h3><span class="icon"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></span>Gastos fijos mensuales</h3>
-      <div class="runway-note">Suscripciones o cuotas que pagas siempre igual: Netflix, gimnasio, Amazon... Se descuentan solas cada mes, sin que tengas que anotarlas.</div>
+      <div class="runway-note">Suscripciones o cuotas que pagas siempre igual: Netflix, gimnasio, Amazon... Dinos el día del mes en que se cobran y se descuentan solas ese día exacto, sin que tengas que anotarlas.</div>
       <div id="a-fixed"></div>
       <button class="add-cat-btn" id="a-add-fixed">+ Añadir gasto fijo</button>
       <div class="total-line"><span>Total mensual (categorías + fijos)</span><span id="a-total">—</span></div>
@@ -713,9 +714,9 @@
     var keys = allMonthKeysSorted();
     var bank = parseFloat(state.bank) || 0;
     var cash = parseFloat(state.cash) || 0;
-    var fixedBank = totalFixedByMethod("Banco");
-    var fixedCash = totalFixedByMethod("Efectivo");
     var budget = totalBudget();
+    var todayKey = monthKey(todayISO());
+    var todayDay = parseInt(todayISO().split("-")[2], 10);
     var rows = [];
     keys.forEach(function(k){
       var monthTx = state.expenses.filter(function(e){ return monthKey(e.date) === k; });
@@ -723,6 +724,21 @@
       var gastoCash = monthTx.filter(function(e){ return e.type==="gasto" && e.method==="Efectivo"; }).reduce(function(s,e){return s+ (parseFloat(e.amount)||0);},0);
       var ingresoBank = monthTx.filter(function(e){ return e.type==="ingreso" && e.method==="Banco"; }).reduce(function(s,e){return s+ (parseFloat(e.amount)||0);},0);
       var ingresoCash = monthTx.filter(function(e){ return e.type==="ingreso" && e.method==="Efectivo"; }).reduce(function(s,e){return s+ (parseFloat(e.amount)||0);},0);
+
+      // Si es el mes en curso, un gasto fijo solo cuenta si su día ya ha llegado
+      // (así el saldo de "hoy" es real). En meses ya cerrados, todos han ocurrido ya.
+      var isCurrentMonth = (k === todayKey);
+      var fixedBank = 0, fixedCash = 0, fixedPending = 0;
+      state.fixedExpenses.forEach(function(f){
+        var day = parseInt(f.day, 10) || 1;
+        var amount = parseFloat(f.amount) || 0;
+        var already = !isCurrentMonth || day <= todayDay;
+        if (already) {
+          if (f.method === "Banco") fixedBank += amount; else fixedCash += amount;
+        } else {
+          fixedPending += amount;
+        }
+      });
 
       var startBank = bank, startCash = cash;
       bank = bank + ingresoBank - gastoBank - fixedBank;
@@ -733,6 +749,7 @@
         ingresos: ingresoBank + ingresoCash,
         gastosVariables: gastoBank + gastoCash,
         fijos: fixedBank + fixedCash,
+        fijosPendientes: fixedPending,
         gastoTotal: gastoBank + gastoCash + fixedBank + fixedCash,
         presupuesto: budget,
         startBank: startBank, startCash: startCash,
@@ -800,6 +817,13 @@
     document.getElementById("r-ingresos").textContent = eur(row.ingresos);
     document.getElementById("r-spent").textContent = eur(row.gastoTotal);
     document.getElementById("r-budgeted").textContent = eur(row.presupuesto);
+    var pendingEl = document.getElementById("r-fixed-pending");
+    if (row.key === monthKey(todayISO()) && row.fijosPendientes > 0) {
+      pendingEl.style.display = "block";
+      pendingEl.textContent = "Quedan " + eur(row.fijosPendientes) + " en gastos fijos por cobrar este mes.";
+    } else {
+      pendingEl.style.display = "none";
+    }
 
     var catsWrap = document.getElementById("r-cats");
     catsWrap.innerHTML = "";
@@ -824,13 +848,16 @@
       fixedEmpty.style.display = "block";
     } else {
       fixedEmpty.style.display = "none";
+      var todayD = parseInt(todayISO().split("-")[2], 10);
       state.fixedExpenses.forEach(function(f){
+        var day = parseInt(f.day,10) || 1;
+        var pending = day > todayD;
         var frow = document.createElement("div");
         frow.className = "row";
         frow.innerHTML =
           '<span class="name"><span class="icon">'+iconSvg('repeat',16)+'</span>'+escapeHtml(f.name)+
-          ' <span style="color:var(--muted); font-size:12px;">· '+escapeHtml(f.method)+'</span></span>' +
-          '<span class="amount">'+eur(f.amount)+'</span>';
+          ' <span style="color:var(--muted); font-size:12px;">· día '+day+' · '+escapeHtml(f.method)+(pending?' · pendiente':'')+'</span></span>' +
+          '<span class="amount'+(pending?' muted':'')+'">'+eur(f.amount)+'</span>';
         fixedWrap.appendChild(frow);
       });
     }
@@ -960,6 +987,7 @@
       row.innerHTML =
         '<span class="icon">'+iconSvg('repeat',17)+'</span>' +
         '<input type="text" value="'+escapeHtml(f.name)+'" data-idx="'+idx+'" data-field="name" placeholder="Ej. Netflix">' +
+        '<input type="number" min="1" max="31" step="1" value="'+(f.day||1)+'" data-idx="'+idx+'" data-field="day" style="flex:0.55; min-width:56px;" title="Día del mes en que se cobra">' +
         '<input type="number" step="0.01" value="'+f.amount+'" data-idx="'+idx+'" data-field="amount">' +
         '<select data-idx="'+idx+'" data-field="method">' +
           '<option'+(f.method==="Banco"?' selected':'')+'>Banco</option>' +
@@ -976,6 +1004,12 @@
         if (field === "name") state.fixedExpenses[idx].name = inp.value.trim() || state.fixedExpenses[idx].name;
         else if (field === "amount") state.fixedExpenses[idx].amount = parseFloat(inp.value) || 0;
         else if (field === "method") state.fixedExpenses[idx].method = inp.value;
+        else if (field === "day") {
+          var d = parseInt(inp.value, 10);
+          if (!d || d < 1) d = 1;
+          if (d > 31) d = 31;
+          state.fixedExpenses[idx].day = d;
+        }
         saveState();
         renderAll();
       });
@@ -1005,7 +1039,7 @@
     renderAjustes();
   });
   document.getElementById("a-add-fixed").addEventListener("click", function(){
-    state.fixedExpenses.push({id: uid(), name: "Nuevo gasto fijo", amount: 0, method: "Banco"});
+    state.fixedExpenses.push({id: uid(), name: "Nuevo gasto fijo", amount: 0, method: "Banco", day: 1});
     saveState();
     renderAjustes();
   });
